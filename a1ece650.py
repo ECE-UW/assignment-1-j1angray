@@ -1,22 +1,256 @@
-import sys
+#!/usr/bin/env python
+# coding:utf-8
 
-# YOUR CODE GOES HERE
+import re
+
+
+def split_vertex(vertex_list):
+    vertices = []
+    vertex_pattern = re.compile(r'\(\-?\d,\-?\d\)')
+    str_vertices = vertex_pattern.findall(vertex_list)
+    for i in str_vertices:
+        pattern = r'\((\-?\d),(\-?\d)\)'
+        matchVer = re.match(pattern, i)
+        if matchVer:
+            vx = matchVer.group(1)
+            vy = matchVer.group(2)
+            v = Vertex(vx, vy)
+            vertices.append(v)
+    return vertices
+
+
+class Runningerror(RuntimeError):  # Custom exception
+    def __init__(self, arg):
+        self.args = arg
+
+
+class Vertex:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.num = -1  # The initial number is -1
+        self.isIntersection = False  # The initial value is not the intersection point
+
+    def sort_id(self, num):
+        self.num = num
+
+    def mark_Intersection(self):
+        self.isIntersection = True
+
+    def output_Vertex(self):
+        print(str(self.num) + ': ({0:.2f}'.format(float(self.x)) + ',' + '{0:.2f})'.format(float(self.y)))
+
+
+class Segment:
+    def __init__(self, vs, ve):
+        self.vs = vs  # Starting vertex
+        self.ve = ve  # Ending vertex
+
+    def seg_func(self):  # Get the parameters for calculating the intersection
+        a = self.vs.y - self.ve.y
+        b = self.ve.x - self.vs.x
+        c = self.vs.x * self.ve.y - self.ve.x * self.vs.y
+        seg_para = []
+        seg_para.append(a)
+        seg_para.append(b)
+        seg_para.append(c)
+        return seg_para
+
+
+class Street:
+    def __init__(self, name, vertices):
+        self.name = name
+        self.vertices = []
+        if len(vertices) >= 2:  # At lease 2 vertices can generate a street.
+            self.vertices = vertices
+
+    def init_segment(self):  # Generate line segments every 2 vertices from the vertices list
+        line_segment = []
+        for i in range(len(self.vertices) - 1):
+            ss = Vertex(float(self.vertices[i].x), float(self.vertices[i].y))
+            se = Vertex(float(self.vertices[i + 1].x), float(self.vertices[i + 1].y))
+            line_seg = Segment(ss, se)
+            line_segment.append(line_seg)
+        return line_segment
+
+
+class Graph:
+    def __init__(self):
+        self.streets = {}
+        self.vertices = []  # vertices: (a)intersection;
+        #          (b)end-point of a line segment of a street that intersects with another street.
+        self.edges = []  # edges if: (a) at least one of them is an intersection;
+        #          (b) both lie on the same street;
+        #          (c) one is reachable from the other without traversing another vertex.
+
+    def add_street(self, cmd):
+        pattern = r'a\s\"([A-Za-z\s]*[A-Za-z])\"\s((\(\-?\d,\-?\d\)\s*)+)$'  # Alphabetical and space characters only(White-space considered)
+        matchCmd = re.match(pattern, cmd, re.I)
+        if matchCmd:
+            str_name = matchCmd.group(1)
+            vertex_list = matchCmd.group(2)
+            str_vertices = split_vertex(vertex_list)
+            self.streets[str_name] = Street(str_name, str_vertices)
+        else:
+            print("Wrong input.")
+
+    def change_street(self, cmd):
+        pattern = r'c\s\"([A-Za-z\s]*[A-Za-z])\"\s((\(\-?\d,\-?\d\)\s*)+)$'  # Alphabetical and space characters only(White-space considered)
+        matchCmd = re.match(pattern, cmd, re.I)
+        if matchCmd:
+            str_name = matchCmd.group(1)
+            if self.streets.has_key(str_name):  # Check if the street exists
+                vertex_list = matchCmd.group(2)
+                str_vertices = split_vertex(vertex_list)
+                self.streets[str_name] = Street(str_name, str_vertices)
+            else:
+                print("Non-existent street.")
+        else:
+            print("Wrong input.")
+
+    def remove_street(self, cmd):
+        pattern = r'r\s\"([A-Za-z\s]*[A-Za-z])\"$'  # Alphabetical and space characters only(White-space considered)
+        matchCmd = re.match(pattern, cmd, re.I)
+        if matchCmd:
+            str_name = matchCmd.group(1)
+            if self.streets.has_key(str_name):  # Check if the street exists
+                del self.streets[str_name]
+            else:
+                print("Non-existent street.")
+        else:
+            print("Wrong input.")
+
+    def generate_graph(self):
+        seg_comb = []  # All segment-intersection combos as [starting vertex,intersection, ending vertex] in, with repeating elements and needs update
+        verticess = []  # All relevant points in with repeating elements and needs update
+        str_names = self.streets.keys()
+        for i in range(len(self.streets) - 1):
+            for j in range(i + 1, len(self.streets)):
+                i_name = str_names[i]
+                i_street = Street(self.streets[i_name].name, self.streets[i_name].vertices)
+                i_seg = i_street.init_segment()
+                j_name = str_names[j]
+                j_street = Street(self.streets[j_name].name, self.streets[j_name].vertices)
+                j_seg = j_street.init_segment()
+                # Each segment of any two streets matches each other for an intersection
+                # using parameters using the four coordinates of the two segments
+                for si in range(len(i_seg)):
+                    s1 = i_seg[si]
+                    for sj in range(len(j_seg)):
+                        s2 = j_seg[sj]
+                        sp1 = s1.seg_func()
+                        sp2 = s2.seg_func()
+                        d = float(sp1[1] * sp2[0] - sp1[0] * sp2[1])
+                        if d != 0:
+                            x = float(float(sp2[1] * sp1[2] - sp1[1] * sp2[2]) / d)
+                            y = float(float(sp1[0] * sp2[2] - sp2[0] * sp1[2]) / d)
+                            if (min(s1.vs.x, s1.ve.x) <= x <= max(s1.vs.x, s1.ve.x)) & (
+                                    min(s2.vs.x, s2.ve.x) <= x <= max(s2.vs.x, s2.ve.x)) & (
+                                    min(s1.vs.y, s1.ve.y) <= y <= max(s1.vs.y, s1.ve.y)) & (
+                                    min(s2.vs.y, s2.ve.y) <= y <= max(s2.vs.y, s2.ve.y)):
+                                v_intersc = Vertex('%.2f' % x, '%.2f' % y)  # intersection
+                                seg_comb.append([i_seg[si].vs, v_intersc, i_seg[si].ve])
+                                seg_comb.append([j_seg[sj].vs, v_intersc, j_seg[sj].ve])
+
+        seg_comb_update = []  # All segment-intersection combos as [starting vertex,intersection, ending vertex] in, no repeating elements
+        for sgc in seg_comb:
+            seg_comb_update.append(sgc)
+        for sc in range(len(seg_comb) - 1):
+            for scc in range(sc + 1, len(seg_comb)):
+                sgc1 = seg_comb[sc]
+                sgc2 = seg_comb[scc]
+                if (sgc1[0].x == sgc2[0].x) & (sgc1[0].y == sgc2[0].y) & (sgc1[1].x == sgc2[1].x) & (
+                        sgc1[1].y == sgc2[1].y) & (sgc1[2].x == sgc2[2].x) & (sgc1[2].y == sgc2[2].y):
+                    seg_comb_update.remove([sgc1[0], sgc1[1], sgc1[2]])
+
+        # Generate V set of the graph
+        for sc in range(len(seg_comb_update)):
+            scb = seg_comb_update[sc]
+            for c in range(len(scb)):
+                verticess.append(scb[c])
+        del self.vertices[:]
+        del self.edges[:]
+        for vts in verticess:
+            self.vertices.append(vts)
+        for vt in range(len(verticess)):
+            item = verticess[vt]
+            tx = float(item.x)
+            ty = float(item.y)
+            for vtt in range(vt + 1, len(verticess)):
+                rx = float(verticess[vtt].x)
+                ry = float(verticess[vtt].y)
+                if (tx == rx) & (ty == ry):
+                    for item in self.vertices:
+                        if (float(item.x) == tx) & (float(item.y) == ty):
+                            self.vertices.remove(item)
+                    self.vertices.append(Vertex(tx, ty))
+        for vts in self.vertices:
+            for i in range(len(self.vertices)):
+                self.vertices[i].num = i + 1
+
+        # Generate E sets of the graph
+        for sc in range(len(seg_comb_update)):
+            scb = seg_comb_update[sc]
+            for c in range(len(scb)):
+                for vts in self.vertices:
+                    if (float(scb[c].x) == vts.x) & (float(scb[c].y) == vts.y):
+                        scb[c].num = vts.num
+                        seg_comb_update[sc] = scb
+        del_list = []  # Separating segments through two intersections to add the shortest edge
+        for i in range(len(seg_comb_update)):
+            scb = seg_comb_update[i]
+            for j in range(i + 1, len(seg_comb_update)):
+                sccb = seg_comb_update[j]
+                if (scb[0].num == sccb[0].num) & (scb[2].num == sccb[2].num):
+                    self.edges.append('<%d,%d>' % (scb[0].num, min(scb[1].num, sccb[1].num)))
+                    self.edges.append('<%d,%d>' % (max(scb[1].num, sccb[1].num), sccb[2].num))
+                    self.edges.append('<%d,%d>' % (scb[1].num, sccb[1].num))
+                    del_list.append(scb)
+                    del_list.append(sccb)
+        for i in del_list:
+            for j in seg_comb_update:
+                if i == j:
+                    seg_comb_update.remove(j)
+        for i in range(len(seg_comb_update)):
+            scb = seg_comb_update[i]
+            self.edges.append('<%d,%d>' % (scb[0].num, scb[1].num))
+            self.edges.append('<%d,%d>' % (scb[1].num, scb[2].num))
+
+        # output graph
+        print("V = {")
+        for vts in self.vertices:
+            vts.output_Vertex()
+        print("}")
+        print("E = {")
+        comma = 0
+        for e in self.edges:
+            comma += 1
+            if comma < len(self.edges):
+                print(str(e) + ",")
+            else:  # last one don't print comma
+                print(str(e))
+        print("}")
+
 
 def main():
-    ### YOUR MAIN CODE GOES HERE
-
-    ### sample code to read from stdin.
-    ### make sure to remove all spurious print statements as required
-    ### by the assignment
+    g = Graph()
     while True:
-        line = sys.stdin.readline()
-        if line == '':
+        try:
+            cmd = raw_input()
+            if cmd[0] == "a":
+                g.add_street(cmd)
+            elif cmd[0] == "c":
+                g.change_street(cmd)
+            elif cmd[0] == "r":
+                g.remove_street(cmd)
+            elif cmd[0] == "g":
+                g.generate_graph()
+            else:
+                raise Runningerror("Error. Input one of a/c/r/g command.")
+        except Runningerror as e:
+            print ("RuntimeError.")
             break
-        print 'read a line:', line
 
-    print 'Finished reading input'
-    # return exit code 0 on successful termination
-    sys.exit(0)
 
 if __name__ == '__main__':
     main()
