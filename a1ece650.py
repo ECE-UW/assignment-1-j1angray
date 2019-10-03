@@ -38,7 +38,7 @@ class Vertex:
         self.isIntersection = True
 
     def output_Vertex(self):
-        print("  "+str(self.num) + ':  ({0:.2f}'.format(float(self.x)) + ',' + '{0:.2f})'.format(float(self.y)))
+        print(str(self.num) + ': ({0:.2f}'.format(float(self.x)) + ',' + '{0:.2f})'.format(float(self.y)))
 
 
 class Segment:
@@ -298,9 +298,9 @@ class Graph:
         for e in self.edges:
             comma += 1
             if comma < len(self.edges):
-                print("  "+str(e) + ",")
+                print(str(e) + ",")
             else:  # last one don't print comma
-                print("  "+str(e))
+                print(str(e))
         print("}")
 
 
