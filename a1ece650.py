@@ -6,10 +6,10 @@ import re
 
 def split_vertex(vertex_list):
     vertices = []
-    vertex_pattern = re.compile(r'\(\-?\d,\-?\d\)')
+    vertex_pattern = re.compile(r'\(\-?\d+,\-?\d+\)')
     str_vertices = vertex_pattern.findall(vertex_list)
     for i in str_vertices:
-        pattern = r'\((\-?\d),(\-?\d)\)'
+        pattern = r'\((\-?\d+),(\-?\d+)\)'
         matchVer = re.match(pattern, i)
         if matchVer:
             vx = matchVer.group(1)
@@ -38,7 +38,7 @@ class Vertex:
         self.isIntersection = True
 
     def output_Vertex(self):
-        print(str(self.num) + ': ({0:.2f}'.format(float(self.x)) + ',' + '{0:.2f})'.format(float(self.y)))
+        print("  "+str(self.num) + ':  ({0:.2f}'.format(float(self.x)) + ',' + '{0:.2f})'.format(float(self.y)))
 
 
 class Segment:
@@ -84,41 +84,44 @@ class Graph:
         #          (c) one is reachable from the other without traversing another vertex.
 
     def add_street(self, cmd):
-        pattern = r'a\s\"([A-Za-z\s]*[A-Za-z])\"\s((\(\-?\d,\-?\d\)\s*)+)$'  # Alphabetical and space characters only(White-space considered)
+        pattern = r'a\s*\"([A-Za-z\s]*[A-Za-z])\"\s(((\(\-?\d+\,\-?\d+\))\s?)+)$'  # Alphabetical and space characters only(White-space considered)
         matchCmd = re.match(pattern, cmd, re.I)
         if matchCmd:
-            str_name = matchCmd.group(1)
+            str_name = matchCmd.group(1).lower() #str_name——Capitalization Insensitive
             vertex_list = matchCmd.group(2)
-            str_vertices = split_vertex(vertex_list)
-            self.streets[str_name] = Street(str_name, str_vertices)
+            if self.streets.has_key(str_name):
+                print("Error: street currently exists.")
+            else:
+                str_vertices = split_vertex(vertex_list)
+                self.streets[str_name] = Street(str_name, str_vertices)
         else:
-            print("Wrong input.")
+            print("Error: Incorrect input format")
 
     def change_street(self, cmd):
-        pattern = r'c\s\"([A-Za-z\s]*[A-Za-z])\"\s((\(\-?\d,\-?\d\)\s*)+)$'  # Alphabetical and space characters only(White-space considered)
+        pattern = r'c\s*\"([A-Za-z\s]*[A-Za-z])\"\s(((\(\-?\d+\,\-?\d+\))\s?)+)$'  # Alphabetical and space characters only(White-space considered)
         matchCmd = re.match(pattern, cmd, re.I)
         if matchCmd:
-            str_name = matchCmd.group(1)
+            str_name = matchCmd.group(1).lower()
             if self.streets.has_key(str_name):  # Check if the street exists
                 vertex_list = matchCmd.group(2)
                 str_vertices = split_vertex(vertex_list)
                 self.streets[str_name] = Street(str_name, str_vertices)
             else:
-                print("Non-existent street.")
+                print("Error: 'c' or 'r' specified for a street that does not exist.")
         else:
-            print("Wrong input.")
+            print("Error: Incorrect input format")
 
     def remove_street(self, cmd):
-        pattern = r'r\s\"([A-Za-z\s]*[A-Za-z])\"$'  # Alphabetical and space characters only(White-space considered)
+        pattern = r'r\s*\"([A-Za-z\s]*[A-Za-z])\"$'  # Alphabetical and space characters only(White-space considered)
         matchCmd = re.match(pattern, cmd, re.I)
         if matchCmd:
-            str_name = matchCmd.group(1)
+            str_name = matchCmd.group(1).lower()
             if self.streets.has_key(str_name):  # Check if the street exists
                 del self.streets[str_name]
             else:
-                print("Non-existent street.")
+                print("Error: 'c' or 'r' specified for a street that does not exist.")
         else:
-            print("Wrong input.")
+            print("Error: Incorrect input format")
 
     def generate_graph(self):
         seg_comb = []  # All segment-intersection combos as [starting vertex,intersection, ending vertex] in, with repeating elements and needs update
@@ -133,7 +136,7 @@ class Graph:
                 j_street = Street(self.streets[j_name].name, self.streets[j_name].vertices)
                 j_seg = j_street.init_segment()
                 # Each segment of any two streets matches each other for an intersection
-                # using parameters using the four coordinates of the two segments
+                # using parameters calculating from the four coordinates of the two segments
                 for si in range(len(i_seg)):
                     s1 = i_seg[si]
                     for sj in range(len(j_seg)):
@@ -151,6 +154,34 @@ class Graph:
                                 v_intersc = Vertex('%.2f' % x, '%.2f' % y)  # intersection
                                 seg_comb.append([i_seg[si].vs, v_intersc, i_seg[si].ve])
                                 seg_comb.append([j_seg[sj].vs, v_intersc, j_seg[sj].ve])
+                        else:  # d==0, which means s1 and s2 are parallel
+                            if (sp1[1]==0) & (sp2[1]==0) & (s1.vs.x==s2.vs.x): #s1 and s2 are on the same line, especially k=0 which means parallel to the y-axis
+                                if (s2.vs.y <= s1.vs.y) & (s1.vs.y <= s1.ve.y) & (s1.ve.y <= s2.ve.y):
+                                    seg_comb.append([s2.vs, s1.vs, s1.ve])
+                                    seg_comb.append([s1.vs, s1.ve, s2.ve])
+                                elif (s1.vs.y <= s2.vs.y) & (s2.vs.y <= s1.ve.y) & (s1.ve.y <= s2.ve.y):
+                                    seg_comb.append([s1.vs, s2.vs, s1.ve])
+                                    seg_comb.append([s2.vs, s1.ve, s2.ve])
+                                elif (s1.vs.y <= s2.vs.y) & (s2.vs.y <= s2.ve.y) & (s2.ve.y <= s1.ve.y):
+                                    seg_comb.append([s1.vs, s2.vs, s2.ve])
+                                    seg_comb.append([s2.vs, s2.ve, s1.ve])
+                                elif (s2.vs.y <= s1.vs.y) & (s1.vs.y <= s2.ve.y) & (s2.ve.y <= s1.ve.y):
+                                    seg_comb.append([s2.vs, s1.vs, s2.ve])
+                                    seg_comb.append([s1.vs, s2.ve, s1.ve])
+                            if (sp1[1]!=0) & (sp2[1]!=0):
+                                if (s1.vs.y + s1.vs.x * sp1[0] / sp1[1]) == (s2.vs.y + s2.vs.x * sp2[0] / sp2[1]):  # s1 and s2 are on the same line, and k!=0 which means unparallel to the y-axis
+                                    if (s2.vs.x <= s1.vs.x) & (s1.vs.x <= s1.ve.x) & (s1.ve.x <= s2.ve.x):
+                                        seg_comb.append([s2.vs, s1.vs, s1.ve])
+                                        seg_comb.append([s1.vs, s1.ve, s2.ve])
+                                    elif (s1.vs.x <= s2.vs.x) & (s2.vs.x <= s1.ve.x) & (s1.ve.x <= s2.ve.x):
+                                        seg_comb.append([s1.vs, s2.vs, s1.ve])
+                                        seg_comb.append([s2.vs, s1.ve, s2.ve])
+                                    elif (s1.vs.x <= s2.vs.x) & (s2.vs.x <= s2.ve.x) & (s2.ve.x <= s1.ve.x):
+                                        seg_comb.append([s1.vs, s2.vs, s2.ve])
+                                        seg_comb.append([s2.vs, s2.ve, s1.ve])
+                                    elif (s2.vs.x <= s1.vs.x) & (s1.vs.x <= s2.ve.x) & (s2.ve.x <= s1.ve.x):
+                                        seg_comb.append([s2.vs, s1.vs, s2.ve])
+                                        seg_comb.append([s1.vs, s2.ve, s1.ve])
 
         seg_comb_update = []  # All segment-intersection combos as [starting vertex,intersection, ending vertex] in, no repeating elements
         for sgc in seg_comb:
@@ -168,10 +199,15 @@ class Graph:
             scb = seg_comb_update[sc]
             for c in range(len(scb)):
                 verticess.append(scb[c])
+        vtcs = []
+        for i in verticess:
+            if not i in vtcs:
+                vtcs.append(i)
         del self.vertices[:]
         del self.edges[:]
         for vts in verticess:
-            self.vertices.append(vts)
+            if vts not in self.vertices:
+                self.vertices.append(vts)
         for vt in range(len(verticess)):
             item = verticess[vt]
             tx = float(item.x)
@@ -180,9 +216,9 @@ class Graph:
                 rx = float(verticess[vtt].x)
                 ry = float(verticess[vtt].y)
                 if (tx == rx) & (ty == ry):
-                    for item in self.vertices:
-                        if (float(item.x) == tx) & (float(item.y) == ty):
-                            self.vertices.remove(item)
+                    for vtitem in self.vertices:
+                        if (float(vtitem.x) == tx) & (float(vtitem.y) == ty):
+                            self.vertices.remove(vtitem)
                     self.vertices.append(Vertex(tx, ty))
         for vts in self.vertices:
             for i in range(len(self.vertices)):
@@ -196,25 +232,61 @@ class Graph:
                     if (float(scb[c].x) == vts.x) & (float(scb[c].y) == vts.y):
                         scb[c].num = vts.num
                         seg_comb_update[sc] = scb
+        temp_edges=[]  # list of edges, with repeating elements and needs update to self.edges
         del_list = []  # Separating segments through two intersections to add the shortest edge
+        scomb_box=[]   # As [starting vertex,intersection1,intersection2, ···, ending vertex]
         for i in range(len(seg_comb_update)):
             scb = seg_comb_update[i]
+            sc_box=[]
             for j in range(i + 1, len(seg_comb_update)):
                 sccb = seg_comb_update[j]
-                if (scb[0].num == sccb[0].num) & (scb[2].num == sccb[2].num):
-                    self.edges.append('<%d,%d>' % (scb[0].num, min(scb[1].num, sccb[1].num)))
-                    self.edges.append('<%d,%d>' % (max(scb[1].num, sccb[1].num), sccb[2].num))
-                    self.edges.append('<%d,%d>' % (scb[1].num, sccb[1].num))
+                if (scb[0].num == sccb[0].num) & (scb[2].num == sccb[2].num) & (scb[0].num != -1) & (scb[2].num != -1):
                     del_list.append(scb)
                     del_list.append(sccb)
+                    if scb[0] not in sc_box:
+                        sc_box.append(scb[0])
+                    if scb[2] not in sc_box:
+                        sc_box.append(scb[2])
+                    if scb[1] not in sc_box:
+                        sc_box.append(scb[1])
+                    sc_box.append(sccb[1])
+                continue
+            if sc_box:
+                scomb_box.append(sc_box)
+        for ics in scomb_box:
+            for icss in scomb_box:
+                if (ics[0].num==icss[0].num) & (ics[len(ics)-1].num==icss[len(icss)-1].num) & (len(ics)>len(icss)):
+                    scomb_box.remove(icss)
+        for ics in scomb_box:
+            n = len(ics)
+            if (float(ics[0].x)==float(ics[n-1].x)):
+                for i in range(1, n):
+                    for j in range(i, 0, -1):
+                        if float(ics[j].y) < float(ics[j - 1].y):
+                            ics[j], ics[j - 1] = ics[j - 1], ics[j]
+                        else:
+                            break
+            else:
+                for i in range(1, n):
+                    for j in range(i, 0, -1):
+                        if float(ics[j].x) < float(ics[j - 1].x):
+                            ics[j], ics[j - 1] = ics[j - 1], ics[j]
+                        else:
+                            break
+        for ics in scomb_box:
+            for i in range(len(ics)-1):
+                temp_edges.append('<%d,%d>' % (ics[i].num, ics[i+1].num))
         for i in del_list:
             for j in seg_comb_update:
                 if i == j:
                     seg_comb_update.remove(j)
         for i in range(len(seg_comb_update)):
             scb = seg_comb_update[i]
-            self.edges.append('<%d,%d>' % (scb[0].num, scb[1].num))
-            self.edges.append('<%d,%d>' % (scb[1].num, scb[2].num))
+            temp_edges.append('<%d,%d>' % (scb[0].num, scb[1].num))
+            temp_edges.append('<%d,%d>' % (scb[1].num, scb[2].num))
+        for ed in temp_edges:
+            if ed not in self.edges:
+                self.edges.append(ed)
 
         # output graph
         print("V = {")
@@ -226,9 +298,9 @@ class Graph:
         for e in self.edges:
             comma += 1
             if comma < len(self.edges):
-                print(str(e) + ",")
+                print("  "+str(e) + ",")
             else:  # last one don't print comma
-                print(str(e))
+                print("  "+str(e))
         print("}")
 
 
@@ -246,9 +318,9 @@ def main():
             elif cmd[0] == "g":
                 g.generate_graph()
             else:
-                raise Runningerror("Error. Input one of a/c/r/g command.")
+                raise Runningerror("Error: Incorrect input format")
         except Runningerror as e:
-            print ("RuntimeError.")
+            print ("Error: Incorrect input format")
             break
 
 
